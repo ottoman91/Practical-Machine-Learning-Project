@@ -1,0 +1,84 @@
+---
+title: "Predicting Quality of Measurements Taken from Personal Health Tracking Wearables"
+author: "Usman Khaliq"
+date: "November 22, 2015"
+output: html_document
+---
+#Executive Summary 
+This report aims to analyze the accuracy of the measurements made with different wearables,such as Fitbit and Nike+. The aim of this exercise is to use random forests to create a machine learning model that can predict the manner in which the participants of the study carried out the exercise by using measurements of the following quantities recorded by their wearables:accelerometers on the belt, forearm, arm, and dumbell. the participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+##Packages Required
+The following packages are required for using the code in this project file
+```{r}
+require(caret) 
+require(data.table)
+require(randomForest)
+```
+
+##Downloading Data
+The data used for this exercise was downloaded from the following publication: 
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The following code was used for downloading the data
+```{r}
+#urls for test and training data
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" 
+
+#downloading data
+trainingData <- fread(trainUrl) 
+testingData <- fread(testUrl)
+```
+
+##Cleaning the datasets and preparing them for the machine learning model
+
+The following code snippet was used for identifying the predictor variables in the testing data set that did not contain any NA values and hence the ones that should be used for creating the classification model.
+```{r}
+#predictor candidates that do not contain any missing values
+isAnyMissing <- sapply(testingData, function (x) any(is.na(x) | x == ""))
+isPredictor <- !isAnyMissing & grepl("belt|[^(fore)]arm|dumbbell|forearm", names(isAnyMissing))
+predCandidates <- names(isAnyMissing)[isPredictor] 
+```
+
+The training data was then subsetted to contain only those predictor variables that did not have any NA values in the testing dataset
+```{r}
+#subset the primary training data
+varToInclude <- c("classe", predCandidates)
+trainingData <- trainingData[,varToInclude, with=FALSE] 
+```
+
+The classe variable(which was to be predicted) is then converted into a factor variable
+```{r}
+#make classe into a factor variable
+trainingData <- trainingData[,classe := factor(trainingData[,classe])] 
+```
+
+##Subsetting Data for cross validation
+To subset data for cross validation, the training data was divided into 60% for training and 40% for validating the training results
+```{r}
+#split training dataset into 60% training and 40% testing
+inTrain <- createDataPartition(trainingData$classe,p=0.6,list=FALSE) 
+training <- trainingData[inTrain,]
+testing <- trainingData[-inTrain,]
+``` 
+
+##Creating a Random Forest Model
+A random forest model was chosen to create the classification function for predicting the "classe" variable. A random forest was chosen for this case since it is a good model to use in cases where the variable to predict depends on several predictor variables.
+```{r}
+#random forest
+rf.fit <- randomForest(classe ~ .,data=training,trControl=trainControl(method = "cv"),number=10) 
+```
+
+
+##Carrying out Cross Validation
+For carrying out cross validation on the validation training data,use the following code:
+```{r}
+hat <- predict(rf.fit, testing)
+confusionMatrix(hat,testing[,classe])
+```
+##Testing Predictions
+Finally, we use the random forest to predict the results of the test set
+```{r}
+hatpred <- predict(rf.fit,trainingData)
+confusionMatrix(hatpred,trainingData[,classe])
+```
